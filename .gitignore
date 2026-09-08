@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# QGIS plugin packaging output
+*.zip
+build/
+
+# Editor/IDE
+.vscode/
+.idea/
+*.swp
+
+# Claude Code local session artifacts (bukan bagian proyek)
+.claude/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment/secrets (jaga-jaga, plugin ini seharusnya tidak pernah menyimpan secret di repo)
+.env
+*.env.local

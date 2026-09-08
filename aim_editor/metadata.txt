@@ -1,0 +1,19 @@
+[general]
+name=AIM Editor
+qgisMinimumVersion=3.22
+description=Controlled geometry editing workflow for airport GIS data (apron, taxiway, etc.) with REST API authorization and PostGIS-native editing.
+version=0.1.0
+author=Roy Irwan
+email=roy.irwan@rajawaliinternational.id
+
+about=Provides a login-gated workflow for editing airport infrastructure geometries (apron, taxiway) stored in PostGIS. Authorizes users against an existing REST API (PASETO tokens), maps application roles to scoped PostgreSQL roles, and lets users search for a parent airport before editing filtered child layers with native QGIS digitizing tools.
+
+tracker=
+repository=
+tags=qgis,postgis,airport,gis,editing,authorization
+homepage=
+category=Plugins
+icon=icons/icon.png
+experimental=True
+deprecated=False
+server=False
