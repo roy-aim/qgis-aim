@@ -40,6 +40,12 @@ class DbCredentials:
     host: str
     port: int
     dbname: str
+    # Nama SCHEMA (bukan database) tempat tabel adhp/ADHPSurfaceArea berada.
+    # WAJIB dipake pas setSchema() di QgsDataSourceUri -- JANGAN asumsi
+    # "public", dikonfirmasi lewat percobaan langsung kalau tabel-tabel ini
+    # nempatnya di schema yang namanya ngikutin user koneksi database backend,
+    # bukan default public. Lihat docs/implementation-plan.md Tahap 3-4.
+    schema: str
     user: str
     password: str
     expires_at: str  # timestamp ISO-8601, dipake buat cek kapan mesti refresh
@@ -153,23 +159,36 @@ class ApiClient:
     def get_db_credentials(self) -> DbCredentials:
         """
         GET /db-credentials  (Authorization: Bearer <token>)
-        -> { "host", "port", "dbname", "user", "password", "expires_at" }
+        -> { "host", "port", "dbname", "schema", "user", "password", "expires_at" }
 
-        PENTING: endpoint ini BELUM ADA di backend, masih perlu dibikin.
-        Alur kerja yang diharapkan di sisi server (lihat business-rules.md
-        Bagian 3.2 buat detail lengkap):
+        Endpoint ini UDAH ADA & jalan di backend (modul internal/dbcredentials/,
+        lihat repo backend-aim). Ringkasan alur kerja di sisi server (detail
+        lengkap di docs/aim-pages/qgis-support/qgis-be-business-rules.md):
           1. Verifikasi token PASETO (pake AuthMiddleware yang udah ada).
-          2. Ambil daftar permission user (pake logic yang sama kayak /me,
-             yaitu permission.Service.GetForRoles(roleIDs)).
-          3. Petain permission itu ke SATU role PostgreSQL (ada
-             qgis-apron-taxiway:update -> role qgis_writer_apron_taxiway;
-             cuma qgis-apron-taxiway:read -> role qgis_reader_apron_taxiway).
+          2. Cek permission qgis-apron-taxiway:update lewat
+             middleware.PermissionAuthMiddleware -- kalo ga ada, 403.
+          3. Petain ke SATU role PostgreSQL: qgis_writer_apron_taxiway.
+             (Mode baca-saja/qgis_reader_apron_taxiway SENGAJA ditunda ke
+             iterasi berikutnya, rilis awal cuma ada 1 role.)
              Role Postgres itu cuma boleh nulis/baca ADHPSurfaceArea dengan
-             SUBTYPE_CODE 6/8 lewat RLS. Pemetaan ini logic baru, ga ada
-             tabel existing buat ini (detail lengkap ada di repo backend-aim
-             docs/aim-pages/qgis-support/qgis-be-business-rules.md).
-          4. Balikin kredensial role Postgres itu: host, port, dbname, user,
-             password, expires_at.
+             SUBTYPE_CODE 6/8 lewat RLS.
+          4. Balikin kredensial role Postgres itu: host, port, dbname, schema,
+             user, password, expires_at.
+
+        PENTING soal field `schema`: dikonfirmasi lewat percobaan langsung
+        kalo tabel adhp/ADHPSurfaceArea itu TIDAK ada di schema "public" --
+        nempatnya di schema yang namanya ngikutin user koneksi database
+        backend. WAJIB dipake pas setSchema() di QgsDataSourceUri nanti,
+        jangan hardcode/asumsi "public".
+
+        PENTING soal casing identifier SQL: tabel ADHPSurfaceArea dan semua
+        kolomnya (SUBTYPE_CODE, ADHP_ID, dst) dibuat TANPA tanda kutip di
+        migration backend, jadi PostgreSQL otomatis fold ke huruf kecil
+        (tersimpan sebagai adhpsurfacearea, subtype_code, dst). Kalo nanti
+        nulis ekspresi setSubsetString()/SQL apa pun di layer_manager.py,
+        JANGAN pake tanda kutip di sekitar nama-nama ini -- kalo dikutip,
+        Postgres nyari nama persis huruf besar-kecilnya yang ga ada, query
+        gagal (dikonfirmasi lewat error nyata pas setup role Postgres).
 
         Cakupan rilis awal itu per SUBTYPE_CODE (cuma Taxiway=6 & Apron=8),
         bukan per bandara/wilayah, soalnya sistem permission backend emang
@@ -196,6 +215,7 @@ class ApiClient:
                 host=data["host"],
                 port=int(data["port"]),
                 dbname=data["dbname"],
+                schema=data["schema"],
                 user=data["user"],
                 password=data["password"],
                 expires_at=data["expires_at"],
