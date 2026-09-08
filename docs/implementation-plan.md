@@ -35,12 +35,13 @@ Status saat ini: `__init__.py`, `metadata.txt`, `api_client.py`, `auth_manager.p
 - [x] `implementation-plan.md` (dokumen ini)
 - [x] `CLAUDE.md` dengan ringkasan keputusan arsitektur
 
-### Tahap 1 — Skeleton Plugin & Boilerplate QGIS — **kode selesai, menunggu verifikasi manual**
+### Tahap 1 — Skeleton Plugin & Boilerplate QGIS — **SELESAI (diverifikasi manual 2026-09-08)**
 - [x] Struktur folder dan `metadata.txt` sesuai konvensi plugin QGIS.
 - [x] `__init__.py` dengan `classFactory()`.
 - [x] `main_plugin.py` minimal: registrasi ke toolbar/menu QGIS (`initGui`, `unload`), satu tombol placeholder ("Buka AIM Editor") yang menampilkan pesan info di message bar QGIS — belum ada logic bisnis (belum connect ke `login_dialog`/`api_client`).
 - [x] Symlink dibuat dari `%APPDATA%\QGIS\QGIS3\profiles\default\python\plugins\aim_editor` ke folder `aim_editor/` di repo ini, untuk pengujian lokal di QGIS Desktop.
-- **Kriteria selesai:** plugin bisa di-install ke QGIS (via symlink ke folder plugins) dan muncul di menu Plugins tanpa error, tombol toolbar ada tapi belum berfungsi. **Perlu diverifikasi manual oleh user** di QGIS Desktop (Plugins → Manage and Install Plugins → Installed → aktifkan "AIM Editor").
+- [x] **Diverifikasi user langsung di QGIS Desktop:** plugin aktif tanpa error, tombol toolbar berfungsi dan menampilkan pesan info yang sesuai.
+- **Kriteria selesai:** plugin bisa di-install ke QGIS (via symlink ke folder plugins) dan muncul di menu Plugins tanpa error, tombol toolbar ada tapi belum berfungsi penuh. **Tercapai.**
 
 ### Tahap 2 — Autentikasi REST API & Kredensial DB
 - `api_client.py`: implementasi `login()`, `get_me()`, `get_db_credentials()`, disesuaikan dengan skema backend nyata (hasil riset repo `backend-aim`, Go/Gin) — **sudah dikerjakan**:
