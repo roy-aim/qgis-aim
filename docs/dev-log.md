@@ -4,6 +4,14 @@ Dokumen ini mencatat ringkasan pekerjaan yang telah dilakukan pada proyek plugin
 
 ---
 
+## 2026-09-09
+
+### Roy
+
+- **Backend (`backend-aim`) Tahap 3-5 Selesai & Terverifikasi End-to-End** — user menjalankan skrip Tahap 3 (`CREATE ROLE qgis_writer_apron_taxiway` + `GRANT`) dan Tahap 4 (RLS) manual di database dev. Ditemukan & diperbaiki 2 bug lewat percobaan langsung: (1) tabel `adhp`/`ADHPSurfaceArea` ternyata di schema `app_user`, bukan `public` — field `schema` baru ditambahkan ke response `GET /db-credentials`, `api_client.py` (`DbCredentials`) disesuaikan; (2) `ADHPSurfaceArea` dan kolomnya dibuat tanpa tanda kutip di migration backend sehingga case-folded ke lowercase (`adhpsurfacearea`, `subtype_code`) — semua skrip SQL backend yang salah pakai kutip diperbaiki. RLS diverifikasi lewat `psql` langsung (role backend tetap lihat semua subtype, role plugin cuma lihat Apron, akses tabel `users` ditolak). Role aplikasi `qgis_editor_apron_taxiway` di-assign manual ke user seed `ad_editor`; endpoint `GET /db-credentials` diverifikasi end-to-end via `curl` (login → token → `200 OK` dengan kredensial lengkap; user tanpa permission → `403`). Backend sekarang sepenuhnya siap dipakai plugin — sisi plugin sendiri (Tahap 3-4 di `implementation-plan.md`, `layer_manager.py`/`adhp_search_dialog.py`) masih belum ditulis.
+
+---
+
 ## 2026-09-08
 
 ### Roy
