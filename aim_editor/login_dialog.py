@@ -19,6 +19,7 @@ from qgis.PyQt.QtWidgets import (
 from qgis.PyQt.QtCore import Qt
 
 from .api_client import ApiClient, ApiError, DbCredentials
+from . import settings as aim_settings
 
 
 class LoginDialog(QDialog):
@@ -27,17 +28,25 @@ class LoginDialog(QDialog):
       - self.token: token PASETO (string opaque)
       - self.me: dict lengkap dari response GET /me (roles, permissions, dst)
       - self.db_credentials: DbCredentials, kredensial role Postgres
+
+    Field "Server URL" di dialog ini nyimpen base URL REST API lewat
+    settings.py (QSettings) -- bukan hardcode, biar gampang beda antara
+    environment dev/staging/prod tanpa perlu edit kode plugin. Field ini
+    di-prefill dari nilai tersimpan terakhir (atau default kalo first run).
     """
 
-    def __init__(self, base_url: str, parent=None):
+    def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("AIM Editor - Login")
         self.setMinimumWidth(340)
 
-        self.api_client = ApiClient(base_url)
+        self.api_client: ApiClient = None
         self.token = None
         self.db_credentials: DbCredentials = None
         self.me: dict = {}
+
+        self.server_url_edit = QLineEdit(self)
+        self.server_url_edit.setText(aim_settings.get_base_url())
 
         # login_id bisa diisi username ATAU email, samain aja sama backend
         self.login_id_edit = QLineEdit(self)
@@ -45,6 +54,7 @@ class LoginDialog(QDialog):
         self.password_edit.setEchoMode(QLineEdit.Password)
 
         form = QFormLayout()
+        form.addRow("Server URL:", self.server_url_edit)
         form.addRow("Username/Email:", self.login_id_edit)
         form.addRow("Password:", self.password_edit)
 
@@ -65,9 +75,13 @@ class LoginDialog(QDialog):
         self.password_edit.returnPressed.connect(self._on_login_clicked)
 
     def _on_login_clicked(self):
+        server_url = self.server_url_edit.text().strip()
         login_id = self.login_id_edit.text().strip()
         password = self.password_edit.text()
 
+        if not server_url:
+            self.status_label.setText("Server URL wajib diisi.")
+            return
         if not login_id or not password:
             self.status_label.setText("Username/email dan password wajib diisi.")
             return
@@ -78,6 +92,7 @@ class LoginDialog(QDialog):
         # jalan di QThread/QgsTask biar UI ga freeze. Sengaja dibikin sinkron
         # dulu di skeleton ini biar alurnya jelas kebaca.
         try:
+            self.api_client = ApiClient(server_url)
             self.token = self.api_client.login(login_id, password)
             self.me = self.api_client.get_me()
             self.db_credentials = self.api_client.get_db_credentials()
@@ -86,5 +101,10 @@ class LoginDialog(QDialog):
             self.status_label.setText("")
             QMessageBox.critical(self, "Login gagal", str(exc))
             return
+
+        # Login sukses -- simpen server URL ini biar next time udah keisi
+        # otomatis (bukan cuma pas login berhasil doang biar user ga
+        # ke-save URL yang salah/typo kalo login gagal).
+        aim_settings.set_base_url(server_url)
 
         self.accept()

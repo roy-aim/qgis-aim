@@ -5,20 +5,23 @@ ini dan manggil initGui()/unload() di titik yang tepat sesuai lifecycle plugin
 standar (initGui pas plugin diaktifkan, unload pas plugin dinonaktifkan/QGIS
 ditutup).
 
-TAHAP 1 (skeleton): baru bikin tombol toolbar + entry menu doang, belum ada
-logic bisnis apa pun (belum connect ke login_dialog/api_client/dst). Logic
-bisnis nyusul di tahap-tahap berikutnya (lihat docs/implementation-plan.md).
+TAHAP 2 (sekarang): tombol toolbar udah nyambung ke alur login sungguhan --
+buka LoginDialog, simpen kredensial DB ke QgsAuthManager. Alur search-adhp
+dan load-layer (Tahap 3-4) belum ada, masih placeholder.
 """
 
-from qgis.PyQt.QtWidgets import QAction
+from qgis.PyQt.QtWidgets import QAction, QMessageBox
 from qgis.PyQt.QtCore import QCoreApplication
 from qgis.core import QgsApplication
+
+from .login_dialog import LoginDialog
+from .auth_manager import AuthConfigManager
 
 
 class AimEditorPlugin:
     """Class utama plugin. QGIS pegang SATU instance ini selama plugin
-    aktif -- state sesi (token, kredensial, dsb nanti) bakal disimpan
-    sebagai atribut instance di sini di tahap-tahap berikutnya."""
+    aktif -- state sesi (token, kredensial, dsb) disimpan sebagai atribut
+    instance di sini."""
 
     def __init__(self, iface):
         # `iface` ini QgisInterface, jembatan resmi buat plugin ngakses
@@ -29,6 +32,14 @@ class AimEditorPlugin:
         self.menu = "&AIM Editor"
         self.toolbar = self.iface.addToolBar("AIM Editor")
         self.toolbar.setObjectName("AIMEditorToolbar")
+
+        # State sesi login -- None berarti belum login. `me` isinya response
+        # GET /me lengkap (roles, permissions, dst), dipake Tahap 3-4 nanti
+        # buat mutusin layer mana yang boleh dimuat.
+        self.auth_manager = AuthConfigManager()
+        self.token = None
+        self.me = None
+        self.db_credentials = None
 
     def tr(self, message):
         """Wrapper translasi standar QGIS plugin. Dipake konsisten di
@@ -61,9 +72,8 @@ class AimEditorPlugin:
         return action
 
     def initGui(self):
-        """Dipanggil QGIS sekali pas plugin diaktifkan. TAHAP 1: cuma
-        pasang satu tombol placeholder ("Buka AIM Editor") yang belum
-        ngapa-ngapain -- nanti bakal buka login_dialog di tahap berikutnya."""
+        """Dipanggil QGIS sekali pas plugin diaktifkan. Pasang satu tombol
+        "Buka AIM Editor" yang sekarang beneran mulai alur login."""
         # Ikon custom (icons/icon.png) belum digambar -- pakai ikon tema
         # bawaan QGIS dulu ("mActionAddLayer" cukup representatif buat
         # placeholder) biar plugin tetap kelihatan di toolbar tanpa nunggu
@@ -79,21 +89,64 @@ class AimEditorPlugin:
     def unload(self):
         """Dipanggil QGIS pas plugin dinonaktifkan atau QGIS ditutup.
         WAJIB bersih-bersih semua yang dipasang initGui() -- action dari
-        menu/toolbar, plus toolbar-nya sendiri. Di tahap berikutnya, ini
-        juga tempat manggil auth_manager.remove_credentials() (lihat
-        docs/business-rules.md Bagian 3.3 soal kenapa ini wajib)."""
+        menu/toolbar, plus toolbar-nya sendiri. WAJIB juga hapus kredensial
+        DB dari QgsAuthManager (lihat docs/business-rules.md Bagian 3.3
+        soal kenapa ini wajib -- kredensial ga boleh nyangkut lebih lama
+        dari masa sesi)."""
         for action in self.actions:
             self.iface.removePluginMenu(self.menu, action)
             self.iface.removeToolBarIcon(action)
         del self.toolbar
 
+        self.auth_manager.remove_credentials()
+
     def run(self):
-        """Placeholder callback tombol toolbar/menu. TAHAP 1: belum
-        ngapa-ngapain beneran, cuma bukti kalau tombolnya nyambung.
-        Nanti bakal buka LoginDialog dulu, baru lanjut ke alur
-        search-adhp -> load-layer (lihat docs/implementation-plan.md
-        Tahap 2-4)."""
-        self.iface.messageBar().pushInfo(
+        """Callback tombol toolbar/menu. Buka LoginDialog, dan kalo login
+        sukses, simpen kredensial DB ke QgsAuthManager. Alur search-adhp
+        dan load-layer (Tahap 3-4, lihat docs/implementation-plan.md) belum
+        dipanggil dari sini -- masih placeholder pesan info doang."""
+        dialog = LoginDialog(parent=self.iface.mainWindow())
+        if not dialog.exec_():
+            # User klik Cancel atau nutup dialog -- ga ada error, cuma
+            # ga lanjut apa-apa.
+            return
+
+        self.token = dialog.token
+        self.me = dialog.me
+        self.db_credentials = dialog.db_credentials
+
+        try:
+            if self.auth_manager.config_id:
+                # Udah pernah login di sesi QGIS ini (user klik tombol lagi
+                # tanpa restart QGIS) -- UPDATE config yang sama, JANGAN
+                # store_credentials() lagi. Kalo dipaksa create baru tiap
+                # login ulang, config lama nggak pernah kehapus otomatis
+                # dan numpuk terus di qgis-auth.db.
+                self.auth_manager.update_credentials(
+                    user=self.db_credentials.user,
+                    password=self.db_credentials.password,
+                )
+            else:
+                self.auth_manager.store_credentials(
+                    host=self.db_credentials.host,
+                    port=self.db_credentials.port,
+                    dbname=self.db_credentials.dbname,
+                    user=self.db_credentials.user,
+                    password=self.db_credentials.password,
+                )
+        except RuntimeError as exc:
+            QMessageBox.critical(
+                self.iface.mainWindow(),
+                "AIM Editor",
+                self.tr(f"Gagal nyimpen kredensial database: {exc}"),
+            )
+            return
+
+        username = self.me.get("username", "?") if self.me else "?"
+        self.iface.messageBar().pushSuccess(
             "AIM Editor",
-            self.tr("Plugin berhasil dimuat. Alur login belum diimplementasikan (lihat Tahap 2)."),
+            self.tr(
+                f"Login berhasil sebagai {username}. "
+                "Pencarian bandara & pemuatan layer belum diimplementasikan (lihat Tahap 3-4)."
+            ),
         )

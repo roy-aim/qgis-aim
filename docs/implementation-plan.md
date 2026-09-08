@@ -43,15 +43,17 @@ Status saat ini: `__init__.py`, `metadata.txt`, `api_client.py`, `auth_manager.p
 - [x] **Diverifikasi user langsung di QGIS Desktop:** plugin aktif tanpa error, tombol toolbar berfungsi dan menampilkan pesan info yang sesuai.
 - **Kriteria selesai:** plugin bisa di-install ke QGIS (via symlink ke folder plugins) dan muncul di menu Plugins tanpa error, tombol toolbar ada tapi belum berfungsi penuh. **Tercapai.**
 
-### Tahap 2 — Autentikasi REST API & Kredensial DB
-- `api_client.py`: implementasi `login()`, `get_me()`, `get_db_credentials()`, disesuaikan dengan skema backend nyata (hasil riset repo `backend-aim`, Go/Gin) — **sudah dikerjakan**:
+### Tahap 2 — Autentikasi REST API & Kredensial DB — **SELESAI & TERVERIFIKASI (2026-09-09)**
+- [x] `api_client.py`: `login()`, `get_me()`, `get_db_credentials()`, disesuaikan dengan skema backend nyata:
   - `login()`: `POST /auth/login`, request body `{"login_id": ..., "password": ...}`, response `{"token": "v2.local...", "user": {...}}`.
-  - `get_me()`: `GET /me` (endpoint existing), response memuat `roles` (array objek) dan `permissions` (array string `resource:action`). Untuk rilis awal, plugin memeriksa keberadaan permission `qgis-apron-taxiway:read`/`qgis-apron-taxiway:update` (permission baru khusus plugin ini, lihat business-rules.md Bagian 3.2 dan dokumen backend `backend-aim/docs/aim-pages/qgis-support/qgis-be-business-rules.md`) sebagai penentu apakah layer Apron/Taxiway boleh dimuat dan mode akses (baca-saja/dapat-diedit).
-  - `get_db_credentials()`: endpoint **baru** `GET /db-credentials`, masih perlu ditambahkan ke backend (lihat Bagian 3 dokumen ini dan business-rules.md Bagian 3.2).
-- `login_dialog.py`: dialog PyQt5 (login_id/password) yang memanggil `api_client` — **sudah dikerjakan**.
-- `auth_manager.py`: wrapper `QgsAuthManager` — `store_credentials()`, `update_credentials()`, `remove_credentials()` — **sudah dikerjakan**.
-- `settings.py`: base URL REST API disimpan via `QSettings` (bukan hardcode), agar bisa beda antara environment dev/staging/prod — **belum dikerjakan**.
-- **Kriteria selesai:** dari dialog login, plugin berhasil dapat token PASETO, memanggil `/db-credentials`, dan menyimpan kredensial ke `qgis-auth.db` — dapat diverifikasi lewat menu Settings > Options > Authentication di QGIS bahwa config baru muncul (tanpa password terlihat plaintext).
+  - `get_me()`: `GET /me` — **response TIDAK dibungkus envelope**, field (`permissions`, `roles`, dst) langsung di top-level.
+  - `get_db_credentials()`: `GET /db-credentials` — **response DIBUNGKUS envelope `{"data": {...}}`**, beda dari `/me`. Field `schema` disertakan (lihat catatan Tahap 3-4 di bawah).
+- [x] `login_dialog.py`: field "Server URL" (default dari `settings.py`, disimpan lagi setelah login sukses) + login_id/password, memanggil `api_client`.
+- [x] `settings.py` (baru): wrapper `QSettings` — `get_base_url()`/`set_base_url()`.
+- [x] `auth_manager.py`: `store_credentials()`, `update_credentials()`, `remove_credentials()`.
+- [x] `main_plugin.py`: tombol toolbar terhubung penuh ke `LoginDialog` → simpan kredensial via `auth_manager`. Login ulang dalam sesi QGIS yang sama memakai `update_credentials()` (bukan `store_credentials()` lagi) untuk menghindari config auth duplikat menumpuk di `qgis-auth.db`.
+- **Bug ditemukan & diperbaiki lewat testing manual nyata di QGIS Desktop**: `get_db_credentials()` sempat mengakses field response langsung di top-level (`data["host"]`, dst), padahal response endpoint ini dibungkus envelope `{"data": {...}}` — beda dari `/me` yang tidak dibungkus. Menyebabkan `ApiError` generik ("Response db-credentials ga lengkap field-nya") yang membingungkan karena tidak menyebut field spesifik. Diperbaiki: baca lewat `body["data"]`, dan pesan error sekarang menyertakan detail exception asli.
+- **Kriteria selesai:** dari dialog login, plugin berhasil dapat token PASETO, memanggil `/db-credentials`, dan menyimpan kredensial ke `qgis-auth.db`. **Tercapai** — diverifikasi langsung: login `ad_editor`/`ad_editor` di QGIS Desktop sukses, pesan sukses muncul di message bar, config `aim_editor_pg_session` terbentuk di Settings > Options > Authentication.
 
 ### Tahap 3 — Pencarian Parent (adhp / bandara)
 - **Catatan penting soal schema:** tabel `adhp`/`ADHPSurfaceArea` **tidak berada di schema `public`** — dikonfirmasi lewat percobaan langsung saat setup role PostgreSQL di sisi backend (lihat `backend-aim/docs/aim-pages/qgis-support/qgis-be-implementation-plan.md` Tahap 3). Nama schema **bukan** dikonfigurasi manual lewat `QSettings` di plugin — endpoint `GET /db-credentials` sekarang mengembalikan field `schema` eksplisit (lihat Tahap 2 di atas, dan `qgis-be-business-rules.md`), dan itulah yang menjadi sumber kebenaran satu-satunya. `QgsDataSourceUri` yang dipakai untuk memuat layer `adhp` maupun `ADHPSurfaceArea` **wajib** diset eksplisit lewat `setSchema(<nilai dari field schema>)` — bukan mengandalkan default `public`, bukan pula nilai yang di-hardcode di kode plugin.
@@ -78,9 +80,9 @@ Status saat ini: `__init__.py`, `metadata.txt`, `api_client.py`, `auth_manager.p
 - **Kriteria selesai:** simulasi kredensial mendekati kedaluwarsa (mis. set `expires_at` singkat di server dev) tidak memutus sesi edit yang sedang berjalan; layer tetap bisa commit setelah refresh terjadi di background.
 
 ### Tahap 6 — Cleanup & Lifecycle
-- `unload()` di `main_plugin.py`: memanggil `auth_manager.remove_credentials()`, melepas layer yang dimuat plugin, membersihkan referensi.
-- Hook logout eksplisit (tombol logout di UI) yang melakukan hal serupa tanpa perlu unload plugin/QGIS.
-- **Kriteria selesai:** setelah logout atau plugin di-unload, config di `qgis-auth.db` sudah tidak ada lagi (diverifikasi via Settings > Options > Authentication).
+- [x] `unload()` di `main_plugin.py`: memanggil `auth_manager.remove_credentials()`, melepas layer yang dimuat plugin, membersihkan referensi — **sudah dikerjakan sejak Tahap 1**.
+- [ ] Hook logout eksplisit (tombol logout di UI) yang melakukan hal serupa tanpa perlu unload plugin/QGIS — **belum dikerjakan**, sengaja ditunda (diputuskan 2026-09-09) supaya bisa lanjut ke Tahap 3-4 dulu. Untuk sementara, membersihkan sesi cukup lewat nonaktifkan plugin di Plugin Manager, atau hapus manual config "aim_editor_pg_session" di Settings > Options > Authentication.
+- **Kriteria selesai:** setelah logout atau plugin di-unload, config di `qgis-auth.db` sudah tidak ada lagi (diverifikasi via Settings > Options > Authentication). **Tercapai untuk jalur unload**, belum ada jalur logout eksplisit untuk diverifikasi.
 
 ### Tahap 6.5 — Unit Test Otomatis
 - Ditulis untuk logic yang tidak bergantung langsung pada runtime QGIS (atau bisa di-mock), memakai `pytest` + `unittest.mock`:

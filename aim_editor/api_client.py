@@ -210,7 +210,13 @@ class ApiClient:
             )
 
         try:
-            data = resp.json()
+            body = resp.json()
+            # PENTING: response GET /db-credentials dibungkus envelope
+            # {"data": {...}} -- BEDA sama GET /me yang field-nya langsung di
+            # top-level tanpa pembungkus. Dikonfirmasi lewat percobaan
+            # langsung (curl) ke backend nyata, sempat bikin KeyError
+            # membingungkan sebelum ketauan akar masalahnya.
+            data = body["data"]
             return DbCredentials(
                 host=data["host"],
                 port=int(data["port"]),
@@ -221,4 +227,4 @@ class ApiClient:
                 expires_at=data["expires_at"],
             )
         except (ValueError, KeyError) as exc:
-            raise ApiError("Response db-credentials ga lengkap field-nya") from exc
+            raise ApiError(f"Response db-credentials ga lengkap field-nya: {exc}") from exc
