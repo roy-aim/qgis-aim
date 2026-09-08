@@ -8,10 +8,10 @@ email=roy.irwan@rajawaliinternational.id
 
 about=Provides a login-gated workflow for editing airport infrastructure geometries (apron, taxiway) stored in PostGIS. Authorizes users against an existing REST API (PASETO tokens), maps application roles to scoped PostgreSQL roles, and lets users search for a parent airport before editing filtered child layers with native QGIS digitizing tools.
 
-tracker=
-repository=
+tracker=https://github.com/roy-aim/qgis-aim/issues
+repository=https://github.com/roy-aim/qgis-aim
 tags=qgis,postgis,airport,gis,editing,authorization
-homepage=
+homepage=https://github.com/roy-aim/qgis-aim
 category=Plugins
 icon=icons/icon.png
 experimental=True
