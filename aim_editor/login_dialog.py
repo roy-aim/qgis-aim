@@ -74,6 +74,19 @@ class LoginDialog(QDialog):
 
         self.password_edit.returnPressed.connect(self._on_login_clicked)
 
+    def showEvent(self, event):
+        """Override showEvent (BUKAN cuma setFocus() di __init__) -- Qt
+        suka reset fokus widget pas dialog beneran ditampilkan lewat
+        exec_()/show(), jadi setFocus() di __init__ doang kadang ke-
+        override lagi. showEvent() dipanggil TIAP KALI dialog ini muncul,
+        jadi paling reliable buat mastiin fokus awal selalu jatuh ke
+        Username/Email (diminta user 2026-09-09) -- server URL jarang
+        perlu diganti tiap login (udah keisi otomatis dari settings
+        tersimpan), jadi username/email yang paling sering perlu diketik
+        duluan pas dialog ini kebuka."""
+        super().showEvent(event)
+        self.login_id_edit.setFocus()
+
     def _on_login_clicked(self):
         server_url = self.server_url_edit.text().strip()
         login_id = self.login_id_edit.text().strip()
@@ -97,9 +110,21 @@ class LoginDialog(QDialog):
             self.me = self.api_client.get_me()
             self.db_credentials = self.api_client.get_db_credentials()
         except ApiError as exc:
-            self.buttons.setEnabled(True)
             self.status_label.setText("")
             QMessageBox.critical(self, "Login gagal", str(exc))
+            # setEnabled(True) SENGAJA dipindah ke SETELAH QMessageBox.critical()
+            # selesai (bukan sebelum) -- diminta user (2026-09-09) abis lapor
+            # bug nyata: dialog error muncul 2x identik begitu klik OK pertama.
+            # Root cause: kalo tombol di-enable SEBELUM critical() ditutup, ada
+            # jendela waktu kecil di mana mouse-release event dari klik OK di
+            # message box bisa "nge-leak"/ke-propagate ke tombol OK dialog
+            # login yang udah aktif lagi di belakangnya (message box modal
+            # nutup duluan, baru event mouse selesai diproses Qt event loop) --
+            # nge-trigger _on_login_clicked() lagi dengan kredensial yang sama,
+            # makanya errornya identik persis. Nutup tombol tetep disabled
+            # sampe message box beneran selesai ditutup ngilangin jendela
+            # race ini.
+            self.buttons.setEnabled(True)
             return
 
         # Login sukses -- simpen server URL ini biar next time udah keisi
