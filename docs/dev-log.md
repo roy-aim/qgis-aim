@@ -4,6 +4,16 @@ Dokumen ini mencatat ringkasan pekerjaan yang telah dilakukan pada proyek plugin
 
 ---
 
+## 2026-10-22
+
+### Roy
+
+- **Setup end-to-end pertama di mesin dev (`sync2charting`-nya Roy) + 🔴 Bug Nyata: Host Database Salah untuk Client Remote** — plugin pertama kali disetup dari nol di mesin ini: Tahap 1 (seeder) dan Tahap 2 (kode `/db-credentials`) backend ternyata sudah pernah dijalankan sebelumnya di database dev ini, tapi Tahap 3 (`CREATE ROLE qgis_writer_apron_taxiway` + `GRANT`) dan Tahap 4 (RLS) belum — dijalankan manual lewat `psql` (lihat `qgis-be-implementation-plan.md` di repo `backend` untuk skrip lengkapnya). Sempat juga ketemu kendala `.env` backend yang baru diisi (password/schema QGIS) tidak langsung ke-pickup karena proses BE yang sedang jalan sudah start duluan — `.env` cuma dibaca sekali saat boot (`godotenv.Load()` di `internal/server/application.go`), jadi butuh restart proses BE.
+- 🔴 **Bug signifikan ditemukan setelah login end-to-end dari PC terpisah (client QGIS beda mesin dari server BE+DB)**: pencarian ICAO gagal, QGIS memunculkan dialog otentikasi manual ("enter credential untuk realm dbname=aim_db, host=localhost"). Diinvestigasi: kode plugin sendiri (`layer_manager.py`/`auth_manager.py`) SUDAH BENAR (pola `setAuthConfigId()` + `uri.uri(False)` standar PyQGIS, auth method "Basic" sudah tepat) — root cause ada di BACKEND: endpoint `GET /db-credentials` selalu mengembalikan `host` dari `DATABASE_URL` backend sendiri (`localhost`, karena backend+DB satu mesin), padahal client yang connect dari mesin lain butuh IP/hostname server yang sebenarnya, bukan `localhost` miliknya sendiri. Dicatat lengkap di `docs/business-rules.md` Bagian 7 (Batasan yang Diketahui) berikut usulan perbaikan (env var baru `QGIS_APRON_TAXIWAY_DB_HOST` di backend) — **BELUM DIPERBAIKI**, developer tidak bisa melakukan refactor kode backend dari mesin ini saat ditemukan, jadi untuk sementara cuma didokumentasikan supaya tidak hilang/terlupa dan bisa dikerjakan di sesi/mesin lain.
+- **Workaround sementara** (sampai fix di atas dikerjakan): kalau client dan server BE+DB tidak satu mesin, plugin AIM Editor belum bisa dipakai apa adanya — perlu salah satu dari: (a) fix backend di atas, atau (b) jalankan QGIS di mesin yang sama dengan server (tidak scalable untuk pemakaian sungguhan tim lapangan).
+
+---
+
 ## 2026-09-09 (lanjutan lagi — koreksi & fitur editing tambahan)
 
 ### Roy
